@@ -1,0 +1,360 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Exvia Design System Colors */
+    --exvia-black: #131313;
+    --exvia-white: #FFFFFF;
+    --exvia-base-black: #1D1D1D;
+    --exvia-subtle: #EAEAEA;
+    --exvia-border: #EFEFF2;
+    --exvia-blue: #0082F3;
+    --exvia-focus: #4D65FF;
+    
+    /* shadcn tokens mapped to Exvia */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 7.5%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 7.5%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 7.5%;
+    --primary: 0 0% 7.5%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 7.5%;
+    --muted: 0 0% 92%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 0 0% 96%;
+    --accent-foreground: 0 0% 7.5%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 6% 94%;
+    --input: 240 6% 94%;
+    --ring: 0 0% 7.5%;
+    --radius: 0.5rem;
+    
+    /* Animation Easings */
+    --ease-out-quad: cubic-bezier(0.250, 0.460, 0.450, 0.940);
+    --ease-out-cubic: cubic-bezier(0.215, 0.610, 0.355, 1);
+    --ease-out-quart: cubic-bezier(0.165, 0.840, 0.440, 1);
+    --ease-out-circ: cubic-bezier(0.075, 0.820, 0.165, 1);
+    --ease-in-out-quad: cubic-bezier(0.455, 0.030, 0.515, 0.955);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+    font-family: 'Geist', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Geist', Arial, sans-serif;
+    color: var(--exvia-black);
+    overflow-x: hidden;
+  }
+}
+
+/* Typography Utilities */
+@layer utilities {
+  .font-geist {
+    font-family: 'Geist', Arial, sans-serif;
+  }
+  
+  .font-geist-mono {
+    font-family: 'GeistMono', 'Courier New', monospace;
+  }
+  
+  .text-h1 {
+    font-size: clamp(2.5rem, 12vw, 12vw);
+    line-height: 1;
+    letter-spacing: -0.04em;
+    font-weight: 900;
+  }
+  
+  .text-h2 {
+    font-size: clamp(2.5rem, 4rem, 4rem);
+    line-height: 1;
+    letter-spacing: -0.04em;
+    font-weight: 600;
+  }
+  
+  .text-h3 {
+    font-size: 2.5rem;
+    line-height: 1.2;
+    letter-spacing: -0.04em;
+    font-weight: 600;
+  }
+  
+  .text-h4 {
+    font-size: 2.5rem;
+    line-height: 1.1;
+    font-weight: 600;
+  }
+  
+  .text-h5 {
+    font-size: 1.5rem;
+    line-height: 1.2;
+    font-weight: 500;
+  }
+  
+  .text-h6 {
+    font-size: 1.25rem;
+    line-height: 1.3;
+    font-weight: 500;
+  }
+  
+  .text-small {
+    font-size: 0.875rem;
+  }
+  
+  .text-xs {
+    font-size: 0.75rem;
+  }
+  
+  /* Text clamp utilities */
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+/* Animation Classes */
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.8s var(--ease-out-quart) forwards;
+  }
+  
+  .animate-slide-up {
+    animation: slideUp 0.8s var(--ease-out-quart) forwards;
+  }
+  
+  .animate-scale-in {
+    animation: scaleIn 1.8s var(--ease-out-cubic) forwards;
+  }
+  
+  /* Initial hidden state for scroll animations */
+  .anim-hidden {
+    opacity: 0;
+    transform: translateY(15%);
+  }
+  
+  .anim-visible {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.8s var(--ease-out-quart), transform 0.8s var(--ease-out-quart);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(15%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(1.2) translate3d(42vw, 30vh, 0);
+  }
+  to {
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+}
+
+/* Hero specific animations */
+@keyframes heroContainerScale {
+  from {
+    width: 100vw;
+    height: 100vh;
+  }
+  to {
+    width: 20vw;
+    height: 40vh;
+  }
+}
+
+/* Button text slide animation */
+@keyframes textSlideOut {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-150%);
+  }
+}
+
+@keyframes textSlideIn {
+  from {
+    transform: translateY(150%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* Testimonial slider animations */
+@keyframes slideActive {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-100%);
+  }
+}
+
+@keyframes slideInactive {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* Hamburger menu animations */
+@keyframes menuLineFirst {
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(350%) rotate(0deg);
+  }
+  100% {
+    transform: translateY(350%) rotate(-45deg);
+  }
+}
+
+@keyframes menuLineThird {
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-350%) rotate(0deg);
+  }
+  100% {
+    transform: translateY(-350%) rotate(45deg);
+  }
+}
+
+/* Parallax mouse move - used with JS */
+.parallax-element {
+  will-change: transform;
+  transition: transform 0.1s linear;
+}
+
+/* Page Overlay */
+.page-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--exvia-white);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  transition: opacity 0.5s var(--ease-out-cubic);
+}
+
+.page-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Responsive container utilities */
+@layer components {
+  .container-full {
+    width: 100%;
+  }
+  
+  .container-large {
+    width: 100%;
+    max-width: 80rem;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  
+  .container-medium {
+    width: 100%;
+    max-width: 64rem;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  
+  .container-small {
+    width: 100%;
+    max-width: 48rem;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+/* Selection styling */
+::selection {
+  background: var(--exvia-black);
+  color: var(--exvia-white);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--exvia-subtle);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--exvia-black);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #333;
+}
+
+/* Mobile responsive typography */
+@media (max-width: 768px) {
+  .text-h1 {
+    font-size: clamp(2rem, 10vw, 10vw);
+  }
+  
+  .text-h2 {
+    font-size: clamp(1.75rem, 2.5rem, 2.5rem);
+  }
+  
+  .text-h3 {
+    font-size: 1.75rem;
+  }
+}

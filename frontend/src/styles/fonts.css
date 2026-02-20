@@ -1,0 +1,27 @@
+@font-face {
+  font-family: 'Geist';
+  src: local('Geist'), local('Geist Regular');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist';
+  src: local('Geist Medium'), local('Geist');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'GeistMono';
+  src: local('Geist Mono'), local('GeistMono-Medium');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+body {
+  font-family: 'Geist', Arial, sans-serif;
+}
