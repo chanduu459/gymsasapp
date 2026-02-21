@@ -10,10 +10,14 @@ class ApiService {
   }
 
   private async fetch<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
+    const isFormData = options.body instanceof FormData;
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
       ...((options.headers as Record<string, string>) || {}),
     };
+
+    if (!isFormData) {
+      headers['Content-Type'] = 'application/json';
+    }
 
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
@@ -52,12 +56,35 @@ class ApiService {
     return this.fetch('/api/auth/me');
   }
 
+  async identifyFace(imageBase64: string): Promise<ApiResponse<{ member: User; confidence: number; recognized: boolean }>> {
+    return this.fetch('/api/auth/identify-face', {
+      method: 'POST',
+      body: JSON.stringify({ imageBase64 }),
+    });
+  }
+
   // Members
   async getMembers(): Promise<ApiResponse<User[]>> {
     return this.fetch('/api/members');
   }
 
-  async createMember(fullName: string, email: string, phone: string, password?: string): Promise<ApiResponse<User>> {
+  async createMember(fullName: string, email: string, phone: string, password?: string, faceImage?: File): Promise<ApiResponse<User>> {
+    if (faceImage) {
+      const formData = new FormData();
+      formData.append('fullName', fullName);
+      formData.append('email', email);
+      formData.append('phone', phone);
+      if (password) {
+        formData.append('password', password);
+      }
+      formData.append('faceImage', faceImage);
+
+      return this.fetch('/api/members', {
+        method: 'POST',
+        body: formData,
+      });
+    }
+
     return this.fetch('/api/members', {
       method: 'POST',
       body: JSON.stringify({ fullName, email, phone, password }),
@@ -68,6 +95,12 @@ class ApiService {
     return this.fetch(`/api/members/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
+    });
+  }
+
+  async syncMemberFaces(): Promise<ApiResponse<{ message: string; total: number; success: number; failed: number; errors: string[] }>> {
+    return this.fetch('/api/members/sync-faces', {
+      method: 'POST',
     });
   }
 
@@ -121,6 +154,13 @@ class ApiService {
     if (status) params.append('status', status);
     const query = params.toString();
     return this.fetch(`/api/attendance${query ? `?${query}` : ''}`);
+  }
+
+  async faceCheckin(imageBase64: string): Promise<ApiResponse<{ member: { id: string; full_name: string; email: string }; attendance: Attendance; confidence: number; isCheckout: boolean }>> {
+    return this.fetch('/api/attendance/face-checkin', {
+      method: 'POST',
+      body: JSON.stringify({ imageData: imageBase64 }),
+    });
   }
 
   // Cron

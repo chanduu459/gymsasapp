@@ -14,6 +14,8 @@ export interface User {
   phone: string | null;
   role: 'owner' | 'staff' | 'member';
   is_active: boolean;
+  face_image_url?: string | null;
+  face_embedding?: number[] | null;
   created_at: string;
 }
 

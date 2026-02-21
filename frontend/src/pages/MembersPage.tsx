@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '@/services/api';
 import type { User } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,7 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Search, Loader2, Phone, Mail, UserCheck, UserX } from 'lucide-react';
+import { Plus, Search, Loader2, Phone, Mail, UserCheck, UserX, Camera, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -33,6 +33,12 @@ export default function MembersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedFaceImage, setSelectedFaceImage] = useState<File | null>(null);
+  const [facePreviewUrl, setFacePreviewUrl] = useState<string | null>(null);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -43,6 +49,28 @@ export default function MembersPage() {
   useEffect(() => {
     loadMembers();
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (facePreviewUrl) {
+        URL.revokeObjectURL(facePreviewUrl);
+      }
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [facePreviewUrl]);
+
+  useEffect(() => {
+    if (!isCameraOpen || !videoRef.current || !cameraStreamRef.current) {
+      return;
+    }
+
+    videoRef.current.srcObject = cameraStreamRef.current;
+    videoRef.current.play().catch(() => {
+      toast.error('Unable to start camera preview');
+    });
+  }, [isCameraOpen]);
 
   const loadMembers = async () => {
     try {
@@ -66,19 +94,126 @@ export default function MembersPage() {
         formData.fullName,
         formData.email,
         formData.phone,
-        formData.password || undefined
+        formData.password || undefined,
+        selectedFaceImage || undefined
       );
 
       if (response.success && response.data) {
         toast.success('Member created successfully');
         setMembers([response.data, ...members]);
         setIsDialogOpen(false);
+        if (facePreviewUrl) {
+          URL.revokeObjectURL(facePreviewUrl);
+        }
+        setSelectedFaceImage(null);
+        setFacePreviewUrl(null);
         setFormData({ fullName: '', email: '', phone: '', password: '' });
       }
     } catch (error: any) {
       toast.error(error.message || 'Failed to create member');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleImageSelect = (file: File | null) => {
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select a valid image file');
+      return;
+    }
+
+    if (facePreviewUrl) {
+      URL.revokeObjectURL(facePreviewUrl);
+    }
+
+    setSelectedFaceImage(file);
+    setFacePreviewUrl(URL.createObjectURL(file));
+  };
+
+  const clearSelectedImage = () => {
+    if (facePreviewUrl) {
+      URL.revokeObjectURL(facePreviewUrl);
+    }
+    setSelectedFaceImage(null);
+    setFacePreviewUrl(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const stopCamera = () => {
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+      cameraStreamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraOpen(false);
+  };
+
+  const startCamera = async () => {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        toast.error('Camera is not supported in this browser');
+        return;
+      }
+
+      stopCamera();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user' },
+        audio: false,
+      });
+      cameraStreamRef.current = stream;
+      setIsCameraOpen(true);
+    } catch (error) {
+      toast.error('Unable to access camera. Check browser permissions.');
+    }
+  };
+
+  const captureFromCamera = async () => {
+    if (!videoRef.current) {
+      return;
+    }
+
+    const video = videoRef.current;
+    const width = video.videoWidth || 640;
+    const height = video.videoHeight || 480;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext('2d');
+    if (!context) {
+      toast.error('Failed to capture image from camera');
+      return;
+    }
+
+    context.drawImage(video, 0, 0, width, height);
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((result) => resolve(result), 'image/jpeg', 0.92);
+    });
+
+    if (!blob) {
+      toast.error('Failed to capture image from camera');
+      return;
+    }
+
+    const capturedFile = new File([blob], `camera-capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
+    handleImageSelect(capturedFile);
+    stopCamera();
+  };
+
+  const handleDialogChange = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (!open) {
+      stopCamera();
+      clearSelectedImage();
     }
   };
 
@@ -100,7 +235,7 @@ export default function MembersPage() {
           <p className="text-gray-500 mt-1">Manage your gym members</p>
         </div>
         {canAddMember && (
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={handleDialogChange}>
             <DialogTrigger asChild>
               <Button className="gap-2">
                 <Plus className="w-4 h-4" />
@@ -148,6 +283,51 @@ export default function MembersPage() {
                     />
                   </div>
                   <div className="space-y-2">
+                    <Label>Face Image (optional)</Label>
+                    <div className="flex gap-2">
+                      <Button type="button" variant="outline" className="gap-2" onClick={() => fileInputRef.current?.click()}>
+                        <Upload className="w-4 h-4" />
+                        Upload File
+                      </Button>
+                      <Button type="button" variant="outline" className="gap-2" onClick={startCamera}>
+                        <Camera className="w-4 h-4" />
+                        Use Camera
+                      </Button>
+                    </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => handleImageSelect(e.target.files?.[0] || null)}
+                    />
+                    {isCameraOpen && (
+                      <div className="space-y-2 rounded-md border p-2">
+                        <video ref={videoRef} autoPlay muted playsInline className="w-full rounded-md bg-black" />
+                        <div className="flex gap-2">
+                          <Button type="button" className="gap-2" onClick={captureFromCamera}>
+                            <Camera className="w-4 h-4" />
+                            Capture
+                          </Button>
+                          <Button type="button" variant="outline" onClick={stopCamera}>
+                            Close Camera
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    {facePreviewUrl && (
+                      <div className="flex items-center justify-between rounded-md border p-2">
+                        <div className="flex items-center gap-3">
+                          <img src={facePreviewUrl} alt="Face preview" className="w-12 h-12 rounded object-cover" />
+                          <p className="text-sm text-gray-600">{selectedFaceImage?.name || 'Selected image'}</p>
+                        </div>
+                        <Button type="button" variant="ghost" size="icon" onClick={clearSelectedImage}>
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
                     <Label htmlFor="password">Password (optional)</Label>
                     <Input
                       id="password"
@@ -160,7 +340,7 @@ export default function MembersPage() {
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  <Button type="button" variant="outline" onClick={() => handleDialogChange(false)}>
                     Cancel
                   </Button>
                   <Button type="submit" disabled={isSubmitting}>

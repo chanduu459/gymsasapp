@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import pool from '../config/database';
 import { JWT_SECRET } from '../middleware/auth';
+import { searchFaceInCollection } from '../config/rekognition';
 
 export const registerGym = async (req: Request, res: Response) => {
   const { gymName, timezone = 'UTC' } = req.body;
@@ -97,3 +98,48 @@ export const getCurrentUser = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+export const identifyFace = async (req: Request, res: Response) => {
+  const { imageBase64 } = req.body;
+
+  if (!imageBase64) {
+    return res.status(400).json({ success: false, error: 'No image provided' });
+  }
+
+  try {
+    // Convert base64 to Buffer
+    const buffer = Buffer.from(imageBase64, 'base64');
+
+    // Search for face in Rekognition collection
+    const faceMatch = await searchFaceInCollection(buffer);
+
+    if (!faceMatch || !faceMatch.userId) {
+      return res.status(404).json({ success: false, error: 'Face not recognized' });
+    }
+
+    // Get member info by userId (which is stored as ExternalImageId in Rekognition)
+    const result = await pool.query(
+      'SELECT id, full_name, email, phone, role, face_image_url FROM users WHERE id = $1 AND is_active = true',
+      [faceMatch.userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Member not found or inactive' });
+    }
+
+    const member = result.rows[0];
+
+    res.json({
+      success: true,
+      data: {
+        member,
+        confidence: faceMatch.confidence,
+        recognized: true,
+      },
+    });
+  } catch (error: any) {
+    console.error('Face identification error:', error);
+    res.status(500).json({ success: false, error: 'Face identification failed' });
+  }
+};
+
