@@ -104,6 +104,7 @@ export default function LoginPage() {
         setRecognizedMember({
           ...response.data.member,
           confidence: response.data.confidence,
+          subscription: response.data.subscription,
         });
         toast.success(`Face recognized: ${response.data.member.full_name} (${Math.round(response.data.confidence)}% match)`);
       }
@@ -296,6 +297,26 @@ export default function LoginPage() {
                   <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                   <p className="text-xs text-green-600">Confidence: {Math.round(recognizedMember.confidence)}%</p>
                 </div>
+                {recognizedMember.subscription ? (
+                  <div className="mt-3 pt-3 border-t border-green-200 space-y-1">
+                    <p className="text-xs text-green-800">
+                      Plan: <span className="font-semibold">{recognizedMember.subscription.plan_name}</span>
+                    </p>
+                    <p className="text-xs text-green-700">
+                      Status: <span className="font-semibold capitalize">{recognizedMember.subscription.status}</span>
+                    </p>
+                    <p className="text-xs text-green-700">
+                      Expiry: <span className="font-semibold">{new Date(recognizedMember.subscription.expiry_date).toLocaleDateString()}</span>
+                    </p>
+                    <p className="text-xs text-green-700">
+                      Days remaining: <span className="font-semibold">{recognizedMember.subscription.days_remaining}</span>
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mt-3 pt-3 border-t border-green-200">
+                    <p className="text-xs text-green-700">No subscription found for this member.</p>
+                  </div>
+                )}
               </div>
             )}
 

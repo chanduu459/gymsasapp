@@ -56,7 +56,22 @@ class ApiService {
     return this.fetch('/api/auth/me');
   }
 
-  async identifyFace(imageBase64: string): Promise<ApiResponse<{ member: User; confidence: number; recognized: boolean }>> {
+  async identifyFace(imageBase64: string): Promise<ApiResponse<{
+    member: User;
+    confidence: number;
+    recognized: boolean;
+    subscription: {
+      id: string;
+      status: string;
+      start_date: string;
+      expiry_date: string;
+      auto_renew: boolean;
+      plan_name: string;
+      plan_price: number;
+      duration_days: number;
+      days_remaining: number;
+    } | null;
+  }>> {
     return this.fetch('/api/auth/identify-face', {
       method: 'POST',
       body: JSON.stringify({ imageBase64 }),

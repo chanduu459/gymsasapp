@@ -129,10 +129,25 @@ export const identifyFace = async (req: Request, res: Response) => {
 
     const member = result.rows[0];
 
+    const subscriptionResult = await pool.query(
+      `SELECT s.id, s.status, s.start_date, s.expiry_date, s.auto_renew,
+              p.name AS plan_name, p.price AS plan_price, p.duration_days,
+              GREATEST((s.expiry_date - CURRENT_DATE), 0)::int AS days_remaining
+       FROM subscriptions s
+       JOIN plans p ON s.plan_id = p.id
+       WHERE s.user_id = $1
+       ORDER BY CASE WHEN s.status = 'active' THEN 0 ELSE 1 END, s.expiry_date DESC
+       LIMIT 1`,
+      [member.id]
+    );
+
+    const subscription = subscriptionResult.rows[0] ?? null;
+
     res.json({
       success: true,
       data: {
         member,
+        subscription,
         confidence: faceMatch.confidence,
         recognized: true,
       },
