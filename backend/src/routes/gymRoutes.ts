@@ -6,7 +6,7 @@ import { authenticateToken, requireRole, requireTenant } from '../middleware/aut
 const router = Router();
 const upload = multer({
 	storage: multer.memoryStorage(),
-	limits: { fileSize: 5 * 1024 * 1024 },
+	limits: { fileSize: 20 * 1024 * 1024 },
 });
 
 router.get('/members', authenticateToken, requireTenant, getMembers);
