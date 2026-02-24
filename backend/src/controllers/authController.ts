@@ -6,17 +6,48 @@ import { JWT_SECRET } from '../middleware/auth';
 import { searchFaceInCollection } from '../config/rekognition';
 
 export const registerGym = async (req: Request, res: Response) => {
-  const { gymName, timezone = 'UTC' } = req.body;
+  const { gymName, ownerName, email, phone, password, timezone = 'UTC' } = req.body;
+
+  const trimmedGymName = typeof gymName === 'string' ? gymName.trim() : '';
+  const trimmedOwnerName = typeof ownerName === 'string' ? ownerName.trim() : '';
+  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  const trimmedPhone = typeof phone === 'string' ? phone.trim() : '';
+  const passwordValue = typeof password === 'string' ? password.trim() : '';
+
+  if (!trimmedGymName || !trimmedOwnerName || !normalizedEmail || !passwordValue) {
+    return res.status(400).json({
+      success: false,
+      error: 'gymName, ownerName, email and password are required',
+    });
+  }
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
+    const existingUserResult = await client.query(
+      'SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1',
+      [normalizedEmail]
+    );
+
+    if (existingUserResult.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ success: false, error: 'Email is already registered' });
+    }
+
     const gymResult = await client.query(
       'INSERT INTO gyms (name, timezone) VALUES ($1, $2) RETURNING *',
-      [gymName, timezone]
+      [trimmedGymName, timezone]
     );
     const gym = gymResult.rows[0];
+
+    const passwordHash = await bcrypt.hash(passwordValue, 10);
+
+    const ownerResult = await client.query(
+      'INSERT INTO users (tenant_id, full_name, email, phone, role, password_hash) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, tenant_id, full_name, email, phone, role, is_active, created_at',
+      [gym.id, trimmedOwnerName, normalizedEmail, trimmedPhone || null, 'owner', passwordHash]
+    );
+    const owner = ownerResult.rows[0];
 
     await client.query(
       'INSERT INTO plans (tenant_id, name, price, duration_days, description) VALUES ($1, $2, $3, $4, $5)',
@@ -35,7 +66,7 @@ export const registerGym = async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      data: { gym },
+      data: { gym, owner },
     });
   } catch (error: any) {
     await client.query('ROLLBACK');
@@ -50,7 +81,7 @@ export const login = async (req: Request, res: Response) => {
 
   try {
     const result = await pool.query(
-      'SELECT id, tenant_id, full_name, email, phone, role, password_hash, is_active FROM users WHERE email = $1',
+      'SELECT id, tenant_id, full_name, email, phone, role, password_hash, is_active FROM users WHERE LOWER(email) = LOWER($1)',
       [email]
     );
 
