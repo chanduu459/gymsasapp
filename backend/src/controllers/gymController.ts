@@ -84,11 +84,52 @@ export const updateMember = async (req: Request, res: Response) => {
   const user = (req as any).user;
   const { id } = req.params;
   const { fullName, email, phone, isActive } = req.body;
+  const faceImage = req.file;
+  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  const trimmedFullName = typeof fullName === 'string' ? fullName.trim() : '';
 
   try {
-    const result = await pool.query(
-      'UPDATE users SET full_name = $1, email = $2, phone = $3, is_active = $4 WHERE id = $5 AND tenant_id = $6 RETURNING id, tenant_id, full_name, email, phone, role, is_active, face_image_url, face_embedding, created_at',
-      [fullName, email, phone, isActive, id, user.tenant_id]
+    let faceImageUrl: string | null = null;
+    let faceEmbedding: number[] | null = null;
+
+    if (faceImage) {
+      if (!faceImage.mimetype.startsWith('image/')) {
+        return res.status(400).json({ success: false, error: 'Only image uploads are allowed for member face image' });
+      }
+
+      const uploadResult = await uploadMemberFaceImage(user.tenant_id, user.id, faceImage);
+      faceImageUrl = uploadResult.imageUrl;
+      faceEmbedding = buildFaceEmbeddingFromImage(faceImage.buffer);
+    }
+
+    const updateFields: any[] = [trimmedFullName, normalizedEmail, phone || null, isActive, id, user.tenant_id];
+    let query = 'UPDATE users SET full_name = $1, email = $2, phone = $3, is_active = $4';
+
+    if (faceImage) {
+      query += ', face_image_url = $7, face_embedding = $8';
+      updateFields.push(faceImageUrl);
+      updateFields.push(faceEmbedding);
+    }
+
+    query += ' WHERE id = $5 AND tenant_id = $6 RETURNING id, tenant_id, full_name, email, phone, role, is_active, face_image_url, face_embedding, created_at';
+
+    const result = await pool.query(query, updateFields);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Member not found' });
+    }
+
+    if (faceImage) {
+      try {
+        await indexMemberFace(result.rows[0].id, faceImage.buffer);
+      } catch (indexError: any) {
+        console.warn(`Failed to index face for Rekognition: ${indexError.message}`);
+      }
+    }
+
+    await pool.query(
+      'INSERT INTO audit_logs (tenant_id, user_id, action, target, payload) VALUES ($1, $2, $3, $4, $5)',
+      [user.tenant_id, user.id, 'UPDATE_MEMBER', id, JSON.stringify({ email: normalizedEmail })]
     );
 
     res.json({ success: true, data: result.rows[0] });

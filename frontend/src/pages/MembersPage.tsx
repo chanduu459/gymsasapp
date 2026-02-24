@@ -22,7 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Search, Loader2, Phone, Mail, UserCheck, UserX, Camera, Upload, X } from 'lucide-react';
+import { Plus, Search, Loader2, Phone, Mail, UserCheck, UserX, Camera, Upload, X, Edit } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -32,10 +32,12 @@ export default function MembersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedFaceImage, setSelectedFaceImage] = useState<File | null>(null);
   const [facePreviewUrl, setFacePreviewUrl] = useState<string | null>(null);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [editingMember, setEditingMember] = useState<User | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
@@ -111,6 +113,42 @@ export default function MembersPage() {
       }
     } catch (error: any) {
       toast.error(error.message || 'Failed to create member');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMember) return;
+    setIsSubmitting(true);
+
+    try {
+      const response = await api.updateMember(
+        editingMember.id,
+        {
+          full_name: formData.fullName,
+          email: formData.email,
+          phone: formData.phone,
+          is_active: editingMember.is_active,
+        },
+        selectedFaceImage || undefined
+      );
+
+      if (response.success && response.data) {
+        toast.success('Member updated successfully');
+        setMembers(members.map((m) => (m.id === editingMember.id ? response.data! : m)));
+        setIsEditDialogOpen(false);
+        if (facePreviewUrl) {
+          URL.revokeObjectURL(facePreviewUrl);
+        }
+        setSelectedFaceImage(null);
+        setFacePreviewUrl(null);
+        setFormData({ fullName: '', email: '', phone: '', password: '' });
+        setEditingMember(null);
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update member');
     } finally {
       setIsSubmitting(false);
     }
@@ -215,6 +253,30 @@ export default function MembersPage() {
       stopCamera();
       clearSelectedImage();
     }
+  };
+
+  const handleEditDialogChange = (open: boolean) => {
+    setIsEditDialogOpen(open);
+    if (!open) {
+      stopCamera();
+      clearSelectedImage();
+      setEditingMember(null);
+    }
+  };
+
+  const openEditDialog = (member: User) => {
+    setEditingMember(member);
+    setFormData({
+      fullName: member.full_name,
+      email: member.email,
+      phone: member.phone || '',
+      password: '',
+    });
+    if (member.face_image_url) {
+      setFacePreviewUrl(member.face_image_url);
+    }
+    setSelectedFaceImage(null);
+    setIsEditDialogOpen(true);
   };
 
   const filteredMembers = members.filter(
@@ -398,6 +460,7 @@ export default function MembersPage() {
                     <TableHead>Contact</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Joined</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -452,6 +515,19 @@ export default function MembersPage() {
                       <TableCell className="text-gray-600">
                         {new Date(member.created_at).toLocaleDateString()}
                       </TableCell>
+                      <TableCell>
+                        {canAddMember && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-2"
+                            onClick={() => openEditDialog(member)}
+                          >
+                            <Edit className="w-4 h-4" />
+                            Edit
+                          </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -460,6 +536,113 @@ export default function MembersPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Edit Member Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={handleEditDialogChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Member</DialogTitle>
+            <DialogDescription>
+              Update member information.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit}>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="editFullName">Full Name</Label>
+                <Input
+                  id="editFullName"
+                  value={formData.fullName}
+                  onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                  placeholder="John Doe"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editEmail">Email</Label>
+                <Input
+                  id="editEmail"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  placeholder="john@example.com"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editPhone">Phone</Label>
+                <Input
+                  id="editPhone"
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="+1 (555) 123-4567"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Face Image (optional)</Label>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" className="gap-2" onClick={() => fileInputRef.current?.click()}>
+                    <Upload className="w-4 h-4" />
+                    Upload File
+                  </Button>
+                  <Button type="button" variant="outline" className="gap-2" onClick={startCamera}>
+                    <Camera className="w-4 h-4" />
+                    Use Camera
+                  </Button>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleImageSelect(e.target.files?.[0] || null)}
+                />
+                {isCameraOpen && (
+                  <div className="space-y-2 rounded-md border p-2">
+                    <video ref={videoRef} autoPlay muted playsInline className="w-full rounded-md bg-black" />
+                    <div className="flex gap-2">
+                      <Button type="button" className="gap-2" onClick={captureFromCamera}>
+                        <Camera className="w-4 h-4" />
+                        Capture
+                      </Button>
+                      <Button type="button" variant="outline" onClick={stopCamera}>
+                        Close Camera
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {facePreviewUrl && (
+                  <div className="flex items-center justify-between rounded-md border p-2">
+                    <div className="flex items-center gap-3">
+                      <img src={facePreviewUrl} alt="Face preview" className="w-12 h-12 rounded object-cover" />
+                      <p className="text-sm text-gray-600">{selectedFaceImage?.name || 'Current image'}</p>
+                    </div>
+                    <Button type="button" variant="ghost" size="icon" onClick={clearSelectedImage}>
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => handleEditDialogChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting || !formData.fullName || !formData.email}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  'Update Member'
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

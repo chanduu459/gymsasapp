@@ -91,7 +91,14 @@ export default function SubscriptionsPage() {
 
       if (response.success && response.data) {
         toast.success('Subscription created successfully');
-        setSubscriptions([response.data, ...subscriptions]);
+        setSubscriptions((prev) => {
+          const existingIndex = prev.findIndex((sub) => sub.user_id === response.data!.user_id);
+          if (existingIndex === -1) {
+            return [response.data!, ...prev];
+          }
+
+          return prev.map((sub, index) => (index === existingIndex ? response.data! : sub));
+        });
         setIsDialogOpen(false);
         setFormData({
           userId: '',

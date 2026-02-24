@@ -106,7 +106,21 @@ class ApiService {
     });
   }
 
-  async updateMember(id: string, data: Partial<User>): Promise<ApiResponse<User>> {
+  async updateMember(id: string, data: Partial<User>, faceImage?: File): Promise<ApiResponse<User>> {
+    if (faceImage) {
+      const formData = new FormData();
+      formData.append('fullName', data.full_name || '');
+      formData.append('email', data.email || '');
+      formData.append('phone', data.phone || '');
+      formData.append('isActive', String(data.is_active ?? true));
+      formData.append('faceImage', faceImage);
+
+      return this.fetch(`/api/members/${id}`, {
+        method: 'PUT',
+        body: formData,
+      });
+    }
+
     return this.fetch(`/api/members/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),

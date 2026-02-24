@@ -11,7 +11,7 @@ const upload = multer({
 
 router.get('/members', authenticateToken, requireTenant, getMembers);
 router.post('/members', authenticateToken, requireTenant, requireRole('owner', 'staff'), upload.single('faceImage'), createMember);
-router.put('/members/:id', authenticateToken, requireTenant, requireRole('owner', 'staff'), updateMember);
+router.put('/members/:id', authenticateToken, requireTenant, requireRole('owner', 'staff'), upload.single('faceImage'), updateMember);
 router.post('/members/sync-faces', authenticateToken, requireTenant, requireRole('owner'), syncMemberFacesToRekognition);
 
 export default router;
