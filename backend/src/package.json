@@ -1,0 +1,9 @@
+{
+  "name": "gymsaas-backend-src-runner",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix .. run dev",
+    "start": "npm --prefix .. run start",
+    "typecheck": "npm --prefix .. exec tsc --noEmit"
+  }
+}

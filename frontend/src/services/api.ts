@@ -57,9 +57,10 @@ class ApiService {
   }
 
   async identifyFace(imageBase64: string): Promise<ApiResponse<{
-    member: User;
+    member: User | null;
     confidence: number;
     recognized: boolean;
+    message?: string;
     subscription: {
       id: string;
       status: string;

@@ -1,9 +1,7 @@
 import type { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import pool from '../config/database';
-import { uploadMemberFaceImage } from '../config/s3';
 import { buildFaceEmbeddingFromImage } from '../utils/faceEmbedding';
-import { indexMemberFace, indexMemberFaceFromUrl } from '../config/rekognition';
 
 export const getMembers = async (req: Request, res: Response) => {
   const user = (req as any).user;
@@ -32,7 +30,6 @@ export const createMember = async (req: Request, res: Response) => {
   try {
     const passwordValue = typeof password === 'string' && password.trim().length > 0 ? password.trim() : 'welcome123';
     const passwordHash = await bcrypt.hash(passwordValue, 10);
-    let faceImageUrl: string | null = null;
     let faceEmbedding: number[] | null = null;
 
     const existingUser = await pool.query(
@@ -49,25 +46,13 @@ export const createMember = async (req: Request, res: Response) => {
         return res.status(400).json({ success: false, error: 'Only image uploads are allowed for member face image' });
       }
 
-      const uploadResult = await uploadMemberFaceImage(user.tenant_id, user.id, faceImage);
-      faceImageUrl = uploadResult.imageUrl;
-      faceEmbedding = buildFaceEmbeddingFromImage(faceImage.buffer);
+      faceEmbedding = await buildFaceEmbeddingFromImage(faceImage.buffer);
     }
 
     const result = await pool.query(
       'INSERT INTO users (tenant_id, full_name, email, phone, role, password_hash, face_image_url, face_embedding) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, tenant_id, full_name, email, phone, role, is_active, face_image_url, face_embedding, created_at',
-      [user.tenant_id, trimmedFullName, normalizedEmail, phone || null, 'member', passwordHash, faceImageUrl, faceEmbedding]
+      [user.tenant_id, trimmedFullName, normalizedEmail, phone || null, 'member', passwordHash, null, faceEmbedding]
     );
-
-    // Index face in Rekognition collection for face-based login if image provided
-    if (faceImage) {
-      try {
-        await indexMemberFace(result.rows[0].id, faceImage.buffer);
-      } catch (indexError: any) {
-        console.warn(`Failed to index face for Rekognition: ${indexError.message}`);
-        // Don't fail member creation if Rekognition indexing fails; face login just won't work
-      }
-    }
 
     await pool.query(
       'INSERT INTO audit_logs (tenant_id, user_id, action, target, payload) VALUES ($1, $2, $3, $4, $5)',
@@ -89,7 +74,6 @@ export const updateMember = async (req: Request, res: Response) => {
   const trimmedFullName = typeof fullName === 'string' ? fullName.trim() : '';
 
   try {
-    let faceImageUrl: string | null = null;
     let faceEmbedding: number[] | null = null;
 
     if (faceImage) {
@@ -97,9 +81,7 @@ export const updateMember = async (req: Request, res: Response) => {
         return res.status(400).json({ success: false, error: 'Only image uploads are allowed for member face image' });
       }
 
-      const uploadResult = await uploadMemberFaceImage(user.tenant_id, user.id, faceImage);
-      faceImageUrl = uploadResult.imageUrl;
-      faceEmbedding = buildFaceEmbeddingFromImage(faceImage.buffer);
+      faceEmbedding = await buildFaceEmbeddingFromImage(faceImage.buffer);
     }
 
     const updateFields: any[] = [trimmedFullName, normalizedEmail, phone || null, isActive, id, user.tenant_id];
@@ -107,7 +89,7 @@ export const updateMember = async (req: Request, res: Response) => {
 
     if (faceImage) {
       query += ', face_image_url = $7, face_embedding = $8';
-      updateFields.push(faceImageUrl);
+      updateFields.push(null);
       updateFields.push(faceEmbedding);
     }
 
@@ -117,14 +99,6 @@ export const updateMember = async (req: Request, res: Response) => {
 
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'Member not found' });
-    }
-
-    if (faceImage) {
-      try {
-        await indexMemberFace(result.rows[0].id, faceImage.buffer);
-      } catch (indexError: any) {
-        console.warn(`Failed to index face for Rekognition: ${indexError.message}`);
-      }
     }
 
     await pool.query(
@@ -142,36 +116,21 @@ export const syncMemberFacesToRekognition = async (req: Request, res: Response) 
   const user = (req as any).user;
 
   try {
-    // Get all members with face images that belong to this gym
+    // Face embeddings are now generated automatically during member registration.
+    // This endpoint is no longer needed but kept for backward compatibility.
     const result = await pool.query(
-      'SELECT id, full_name, face_image_url FROM users WHERE tenant_id = $1 AND role = $2 AND face_image_url IS NOT NULL AND is_active = true',
+      'SELECT COUNT(*) as total FROM users WHERE tenant_id = $1 AND role = $2 AND face_embedding IS NOT NULL AND is_active = true',
       [user.tenant_id, 'member']
     );
 
-    const members = result.rows;
-    const syncResults = {
-      total: members.length,
-      success: 0,
-      failed: 0,
-      errors: [] as string[],
-    };
-
-    // Index each face in Rekognition
-    for (const member of members) {
-      try {
-        await indexMemberFaceFromUrl(member.id, member.face_image_url);
-        syncResults.success++;
-      } catch (indexError: any) {
-        syncResults.failed++;
-        syncResults.errors.push(`${member.full_name}: ${indexError.message}`);
-      }
-    }
+    const totalWithEmbeddings = parseInt(result.rows[0]?.total || '0', 10);
 
     res.json({
       success: true,
       data: {
-        message: `Face sync completed. ${syncResults.success}/${syncResults.total} faces indexed successfully.`,
-        ...syncResults,
+        message: `Face embeddings are generated automatically at registration. ${totalWithEmbeddings} members currently have face embeddings.`,
+        total: totalWithEmbeddings,
+        info: 'No sync needed - embeddings are created when members are added/updated with face images.',
       },
     });
   } catch (error: any) {

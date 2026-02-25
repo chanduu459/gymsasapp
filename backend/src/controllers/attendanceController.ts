@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import pool from '../config/database';
-import { searchFaceInCollection } from '../config/rekognition';
+import { buildFaceEmbeddingFromImage } from '../utils/faceEmbedding';
+import { findBestFaceEmbeddingMatch } from '../services/faceMatchService';
 
 export const getAttendance = async (req: Request, res: Response) => {
   const user = (req as any).user;
@@ -42,11 +43,17 @@ export const faceCheckin = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'No image provided' });
     }
 
-    // Convert base64 to buffer
     const imageBuffer = Buffer.from(imageData, 'base64');
+    const inputEmbedding = await buildFaceEmbeddingFromImage(imageBuffer);
 
-    // Search for matching face in Rekognition collection
-    const matchResult = await searchFaceInCollection(imageBuffer);
+    const candidatesResult = await pool.query(
+      `SELECT id, full_name, email, tenant_id, is_active, face_embedding
+       FROM users
+       WHERE tenant_id = $1 AND role = 'member' AND is_active = true AND face_embedding IS NOT NULL`,
+      [user.tenant_id]
+    );
+
+    const matchResult = findBestFaceEmbeddingMatch(inputEmbedding, candidatesResult.rows);
 
     if (!matchResult) {
       return res.status(404).json({
@@ -55,23 +62,8 @@ export const faceCheckin = async (req: Request, res: Response) => {
       });
     }
 
-    const memberId = matchResult.userId;
-
-    // Verify the member belongs to this gym and is active
-    const memberCheck = await pool.query(
-      'SELECT id, full_name, email, tenant_id, is_active FROM users WHERE id = $1 AND tenant_id = $2',
-      [memberId, user.tenant_id]
-    );
-
-    if (memberCheck.rows.length === 0) {
-      return res.status(404).json({ success: false, error: 'Member not found in this gym' });
-    }
-
-    const member = memberCheck.rows[0];
-
-    if (!member.is_active) {
-      return res.status(403).json({ success: false, error: 'Member account is deactivated' });
-    }
+    const memberId = matchResult.candidate.id;
+    const member = matchResult.candidate;
 
     const today = new Date().toISOString().split('T')[0];
     const now = new Date();

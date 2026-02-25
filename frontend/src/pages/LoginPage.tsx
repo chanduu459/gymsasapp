@@ -101,12 +101,18 @@ export default function LoginPage() {
       const response = await api.identifyFace(imageBase64);
 
       if (response.success && response.data) {
-        setRecognizedMember({
-          ...response.data.member,
-          confidence: response.data.confidence,
-          subscription: response.data.subscription,
-        });
-        toast.success(`Face recognized: ${response.data.member.full_name} (${Math.round(response.data.confidence)}% match)`);
+        if (response.data.recognized && response.data.member) {
+          setRecognizedMember({
+            ...response.data.member,
+            confidence: response.data.confidence,
+            subscription: response.data.subscription,
+          });
+          toast.success(`Face recognized: ${response.data.member.full_name} (${Math.round(response.data.confidence)}% match)`);
+        } else {
+          const message = response.data.message || 'Face not recognized';
+          setFaceError(message);
+          toast.error(message);
+        }
       }
     } catch (error: any) {
       const errorMsg = error.message || 'Face not recognized';

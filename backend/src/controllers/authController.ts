@@ -3,7 +3,12 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import pool from '../config/database';
 import { JWT_SECRET } from '../middleware/auth';
-import { searchFaceInCollection } from '../config/rekognition';
+import { buildFaceEmbeddingFromImage } from '../utils/faceEmbedding';
+import {
+  findBestFaceEmbeddingCandidate,
+  findBestFaceEmbeddingMatch,
+  getFaceEmbeddingMatchThreshold,
+} from '../services/faceMatchService';
 
 export const registerGym = async (req: Request, res: Response) => {
   const { gymName, ownerName, email, phone, password, timezone = 'UTC' } = req.body;
@@ -77,7 +82,16 @@ export const registerGym = async (req: Request, res: Response) => {
 };
 
 export const login = async (req: Request, res: Response) => {
-  const { email, password } = req.body;
+  const body = req.body ?? {};
+  const email = typeof body.email === 'string' ? body.email.trim() : '';
+  const password = typeof body.password === 'string' ? body.password : '';
+
+  if (!email || !password) {
+    return res.status(400).json({
+      success: false,
+      error: 'email and password are required',
+    });
+  }
 
   try {
     const result = await pool.query(
@@ -138,27 +152,53 @@ export const identifyFace = async (req: Request, res: Response) => {
   }
 
   try {
-    // Convert base64 to Buffer
     const buffer = Buffer.from(imageBase64, 'base64');
+    const inputEmbedding = await buildFaceEmbeddingFromImage(buffer);
 
-    // Search for face in Rekognition collection
-    const faceMatch = await searchFaceInCollection(buffer);
-
-    if (!faceMatch || !faceMatch.userId) {
-      return res.status(404).json({ success: false, error: 'Face not recognized' });
-    }
-
-    // Get member info by userId (which is stored as ExternalImageId in Rekognition)
-    const result = await pool.query(
-      'SELECT id, full_name, email, phone, role, face_image_url FROM users WHERE id = $1 AND is_active = true',
-      [faceMatch.userId]
+    const candidatesResult = await pool.query(
+      `SELECT id, full_name, email, phone, role, face_image_url, face_embedding
+       FROM users
+       WHERE role = 'member' AND is_active = true AND face_embedding IS NOT NULL`
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, error: 'Member not found or inactive' });
+    if (candidatesResult.rows.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          recognized: false,
+          confidence: 0,
+          member: null,
+          subscription: null,
+          message: 'No enrolled member face embeddings found',
+        },
+      });
     }
 
-    const member = result.rows[0];
+    const bestCandidate = findBestFaceEmbeddingCandidate(inputEmbedding, candidatesResult.rows);
+    const threshold = getFaceEmbeddingMatchThreshold();
+    const faceMatch = findBestFaceEmbeddingMatch(inputEmbedding, candidatesResult.rows);
+
+    if (!faceMatch) {
+      return res.json({
+        success: true,
+        data: {
+          recognized: false,
+          confidence: bestCandidate?.confidence ?? 0,
+          member: null,
+          subscription: null,
+          message: `Face not recognized (best similarity ${((bestCandidate?.similarity ?? 0) * 100).toFixed(1)}%, threshold ${(threshold * 100).toFixed(1)}%). If this member was enrolled before embedding update, run /api/members/sync-faces once.`,
+        },
+      });
+    }
+
+    const member = {
+      id: faceMatch.candidate.id,
+      full_name: faceMatch.candidate.full_name,
+      email: faceMatch.candidate.email,
+      phone: faceMatch.candidate.phone,
+      role: faceMatch.candidate.role,
+      face_image_url: faceMatch.candidate.face_image_url,
+    };
 
     const subscriptionResult = await pool.query(
       `SELECT s.id, s.status, s.start_date, s.expiry_date, s.auto_renew,

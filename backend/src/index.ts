@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import { initDatabase } from './config/database';
-import { initFaceCollection } from './config/rekognition';
 import authRoutes from './routes/authRoutes';
 import gymRoutes from './routes/gymRoutes';
 import planRoutes from './routes/planRoutes';
@@ -17,6 +16,7 @@ const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 app.use('/api', authRoutes);
 app.use('/api', gymRoutes);
@@ -30,7 +30,6 @@ app.use('/api', attendanceRoutes);
 // Initialize and start server
 async function startServer() {
   await initDatabase();
-  await initFaceCollection();
   scheduleExpiryJob();
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
